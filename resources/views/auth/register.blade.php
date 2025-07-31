@@ -34,10 +34,23 @@
                         <div class="error-message" id="signupPasswordError"></div>
                     </div>
 
+                    
+
                     <div class="form-group">
                         <input type="password" name="password_confirmation" class="form-input"
                             placeholder="Confirm Password">
                         <div class="error-message" id="signupPasswordConfirmError"></div>
+                    </div>
+
+                     <div class="form-group">
+                        <select name="role" class="form-input" placeholder="Password">
+                        @foreach ($roles as $role)
+                                @if($role->name != "admin")
+                            <option value="{{ $role->name }}">{{ $role->name }}</option>
+                            @endif
+                        @endforeach
+                        </select>
+                        <div class="error-message" id="loginRoleError"></div>
                     </div>
 
                     <button type="submit" class="form-button" id="signupButton">

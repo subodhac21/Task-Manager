@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 
 class TaskResource extends JsonResource
 {
@@ -19,6 +20,7 @@ class TaskResource extends JsonResource
             'title' => $this->title,
             'description' => $this->description,
             'image' => $this->image,
+            "image_path" =>  $this->image ? asset('storage/' . $this->image) : asset('images/default-task.png'),
             'status' => new StatusResource($this->whenLoaded('status')),
             'assignee' => new UserResource($this->whenLoaded('assignee')),
             'priority' => $this->priority,

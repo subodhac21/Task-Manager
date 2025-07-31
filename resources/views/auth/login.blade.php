@@ -32,6 +32,9 @@
                         <div class="error-message" id="loginPasswordError"></div>
                     </div>
 
+
+
+                   
                    
 
                     <div class="remember-forgot">
@@ -41,6 +44,8 @@
                         </label>
                         <a href="#" class="forgot-password">Forgot Password?</a>
                     </div>
+
+                    
 
                     <button type="submit" class="form-button" id="loginButton">
                         <div class="loading"></div>

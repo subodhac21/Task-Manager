@@ -1,6 +1,6 @@
 <script>
     let tasks = [];
-        let filteredTasks = [];
+    let filteredTasks = [];
 
     let editingTaskId = null;
     let filters = {
@@ -60,7 +60,7 @@
                 onEnd: (evt) => {
                     evt.item.classList.remove('dragging');
                     const taskId = evt.item.dataset.taskid;
-                    const newStatusId = evt.to.dataset.id; 
+                    const newStatusId = evt.to.dataset.id;
                     updateTaskStatus(taskId, newStatusId);
                 }
             });
@@ -78,6 +78,9 @@
             document.getElementById('taskDescription').value = task.description || '';
             document.getElementById('taskPriority').value = task.priority;
             document.getElementById('taskStatus').value = task.status;
+            document.getElementById("previewImage").src = task.image_path || '';
+            document.getElementById("previewImage").style.display = 'block';
+            document.getElementById("status-row").style.display = 'none';
         } else {
             editingTaskId = null;
             modalTitle.textContent = 'Add New Task';
@@ -95,39 +98,53 @@
 
     async function saveTask(event) {
         event.preventDefault();
-        const formData = {
-            title: document.getElementById('taskTitle').value.trim(),
-            description: document.getElementById('taskDescription').value.trim(),
-            //assignee: document.getElementById('taskAssignee').value,
-            priority: document.getElementById('taskPriority').value,
-            //dueDate: document.getElementById('taskDueDate').value,
-            image: document.getElementById('taskImage').files[0]
-        };
+        let taskError = document.getElementById('taskError');
+        taskError.style.display = 'none';
 
-        await fetch(editingTaskId ? "{{route('tasks.update.details', ':id')}}".replace(':id', editingTaskId) : "{{ route('tasks.store') }}", {
-            method: editingTaskId ? 'POST' : 'POST',
-            headers: {
-                "X-CSRF-TOKEN": "{{ csrf_token() }}",
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                ...formData,
+        const formData = new FormData();
+        formData.append('title', document.getElementById('taskTitle').value.trim());
+        formData.append('description', document.getElementById('taskDescription').value.trim());
+        formData.append('priority', document.getElementById('taskPriority').value);
+        formData.append('status_id', document.getElementById("taskStatus").value);
+
+        const imageFile = document.getElementById('taskImage').files[0];
+        if (imageFile) {
+            formData.append('image', imageFile);
+        }
+
+        const url = editingTaskId ?
+            "{{ route('tasks.update.details', ':id') }}".replace(':id', editingTaskId) :
+            "{{ route('tasks.store') }}";
+
+        await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': "{{ csrf_token() }}"
+                },
+                body: formData
             })
-        }).then((response) => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            console.log(response?.json());
-            return response.json();
-        }).then((data) => {
-           
-        }).catch((error) => {
-            console.error('Error saving task:', error);
-        });
+            .then(async (response) => {
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw errorData;
+                }
+                closeTaskModal();
+
+                return response.json();
+            })
+            .then((data) => {
+                renderTasks();
+            })
+            .catch((error) => {
+                taskError.style.display = 'block';
+                let errors = "";
+                Object.values(error.errors || {}).forEach(err => {
+                    errors += `<li>${err.join(', ')}</li>`;
+                });
+                taskError.innerHTML = `<ul>${errors}</ul>`;
+            });
 
 
-        renderTasks();
-        closeTaskModal();
     }
 
     function deleteTask(taskId) {
@@ -166,7 +183,7 @@
     }
 
     function applyFilters() {
-        renderTasks();
+        {{-- renderTasks(); --}}
     }
 
     function clearFilters() {
@@ -185,15 +202,15 @@
         renderTasks();
     }
 
-    function getFilteredTasks() {
+    {{-- function getFilteredTasks() {
         return tasks.filter(task => {
-            if (filters.user && task.assignee !== filters.user) return false;
+            if (filters.user && task.assigned_to !== filters.user) return false;
             if (filters.status && task.status !== filters.status) return false;
             if (filters.priority && task.priority !== filters.priority) return false;
             if (filters.dueDate && task.dueDate !== filters.dueDate) return false;
             return true;
         });
-    }
+    } --}}
 
     function getDueDateClass(dueDate) {
         if (!dueDate) return '';
@@ -230,25 +247,30 @@
                     <button class="task-action-btn" onclick="deleteTask('${task.id}')" title="Delete">
                         🗑️
                     </button>
+                     @if (Auth::user()->hasRole('admin'))
+                    <button  data-id=${task.id} class="assign-role">Assign User</button>
+                @endif
                 </div>
                 <div class="task-title">${task.title}</div>
                 ${task.description ? `<div class="task-description">${task.description}</div>` : ''}
                 <div class="task-meta">
-                    <span class="task-assignee">${task.assignee ?? 'not assigned'}</span>
-                    {{-- <span class="task-due-date ${dueDateClass}">${formatDate(task.dueDate)}</span> --}}
+                    <span class="task-assignee">Assigned to: ${task.assignee.name ?? 'not assigned'}</span>
                 </div>
+                <img width="80" height="80" src="${task.image }" alt="Task Image" class="task-image">
             </div>
         `;
     }
 
-    async function renderTasks() {
+    async function renderTasks(params = null) {
         let statuses = [];
-        await fetch('{{ route('tasks.index') }}', {
-                method: 'GET',
-                headers: {
-                    "X-CSRF-TOKEN": "{{ csrf_token() }}",
-                }
-            })
+        const query = new URLSearchParams(params).toString();
+        await fetch(params ? '{{ route('tasks.index', ':id') }}'.replace(":id", `${query}`) :
+                '{{ route('tasks.index') }}', {
+                    method: 'GET',
+                    headers: {
+                        "X-CSRF-TOKEN": "{{ csrf_token() }}",
+                    }
+                })
             .then(response => response.json())
             .then(data => {
                 tasks = data.data.map(task => ({
@@ -307,10 +329,64 @@
                 countElement.textContent = statusTasks.length;
             }
         });
+
+        let activeTaskId = null;
+
+// Attach to all role buttons
+document.querySelectorAll(".assign-role").forEach((role) => {
+  role.addEventListener("click", (e) => {
+    activeTaskId = role.dataset.id;
+    document.getElementById("assignRoleModal").style.display = "flex";
+  });
+});
+
+document.querySelector(".assignUser").addEventListener("click", async () => {
+  const user = document.querySelector("#user").value;
+
+  if (!user) {
+    alert("Please select a user");
+    return;
+  }
+
+  try {
+    const response = await fetch("{{route('tasks.assign.user')}}", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-TOKEN": document.querySelector("meta[name='csrf-token']").content
+      },
+      body: JSON.stringify({
+        task_id: activeTaskId,
+        user_id: user,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data?.success) {
+      alert(data.message);
+      document.getElementById("assignRoleModal").style.display = "none";
+      location.reload()
+    } else {
+      alert("Assignment failed.");
+    }
+  } catch (err) {
+    console.error("Error:", err);
+  }
+});
+
+
+        
     }
 
     setupSortable();
     renderTasks();
+
+    function closeModal() {
+        document.getElementById('assignRoleModal').style.display = 'none';
+    }
+
+
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -323,5 +399,47 @@
         }
     });
 
-   
+
+    function filterTasks() {
+        const userFilter = document.getElementById('userFilter').value;
+        const statusFilter = document.getElementById('statusFilter').value;
+        const priorityFilter = document.getElementById('priorityFilter').value;
+        const assigned_at = document.getElementById('dueDateFilter').value;
+
+
+
+        renderTasks({
+            'assigned_to': userFilter,
+            'status': statusFilter,
+            'priority': priorityFilter,
+            'assigned_at': assigned_at
+        });
+    }
+
+    document.getElementById('applyFilters').addEventListener('click', filterTasks);
+</script>
+
+
+<script>
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    logoutBtn.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to log out?')) {
+            await fetch("{{ route('logout') }}", {
+                    method: 'POST',
+                    headers: {
+                        "X-CSRF-TOKEN": "{{ csrf_token() }}"
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    window.location.href = '/';
+                })
+                .catch(error => {
+                    console.error('Error logging out:', error);
+                });
+        }
+    });
 </script>

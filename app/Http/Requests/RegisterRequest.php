@@ -27,6 +27,7 @@ class RegisterRequest extends FormRequest
             "email"=> "required|email|unique:users,email",
             "password"=> "required|min:6|confirmed",
             "name"=> "required|string|max:255",
+            'role'=> 'required|in:manager,coordinator,frontdesk'
         ];
     }
 
